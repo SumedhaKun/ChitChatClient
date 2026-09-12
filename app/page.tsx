@@ -1,47 +1,29 @@
 'use client'
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import ChatWindow from '@/components/ChatWindow'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import UserSearch from '@/components/UserSearch'
+import { allUsers, initialContacts } from '@/data/mockUsers'
 import type { Contact } from '@/types'
 
-const mockContacts: Contact[] = [
-  {
-    id: 1,
-    name: 'John Doe',
-    status: 'online',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    status: 'offline',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jane',
-  },
-  {
-    id: 3,
-    name: 'Mike Johnson',
-    status: 'online',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
-  },
-  {
-    id: 4,
-    name: 'Sarah Williams',
-    status: 'offline',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-  },
-]
-
 export default function Home() {
-  const [selectedContact, setSelectedContact] = useState<Contact>(mockContacts[0])
+  const [contacts, setContacts] = useState<Contact[]>(initialContacts)
+  const [selectedContact, setSelectedContact] = useState<Contact>(initialContacts[0])
+
+  const handleSelectUser = (user: Contact) => {
+    setContacts((prev) => (prev.some((c) => c.id === user.id) ? prev : [...prev, user]))
+    setSelectedContact(user)
+  }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-gray-950">
       <Header userAvatar="https://api.dicebear.com/7.x/avataaars/svg?seed=User" />
+      <UserSearch users={allUsers} onSelectUser={handleSelectUser} />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar contacts={mockContacts} selectedContact={selectedContact} onSelectContact={setSelectedContact} />
-        <ChatWindow contact={selectedContact} />
+        <Sidebar contacts={contacts} selectedContact={selectedContact} onSelectContact={setSelectedContact} />
+        <ChatWindow key={selectedContact.id} contact={selectedContact} />
       </div>
     </div>
   )

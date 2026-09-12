@@ -1,6 +1,7 @@
 export interface Contact {
   id: number
   name: string
+  username: string
   status: 'online' | 'offline'
   avatar: string
 }

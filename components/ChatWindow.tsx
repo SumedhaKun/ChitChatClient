@@ -60,18 +60,18 @@ export default function ChatWindow({ contact }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
+    <div className="flex-1 flex flex-col bg-gray-950">
       {/* Chat Header */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center gap-3">
+      <div className="bg-gray-900 border-b border-gray-800 p-4 flex items-center gap-3">
         <img
           src={contact.avatar}
           alt={contact.name}
           className="w-10 h-10 rounded-full object-cover"
         />
         <div>
-          <h2 className="font-semibold text-gray-900">{contact.name}</h2>
+          <h2 className="font-semibold text-gray-100">{contact.name}</h2>
           <p className={`text-xs ${
-            contact.status === 'online' ? 'text-green-600' : 'text-gray-500'
+            contact.status === 'online' ? 'text-green-400' : 'text-gray-500'
           }`}>
             {contact.status === 'online' ? '● Online' : '○ Offline'}
           </p>
@@ -89,12 +89,12 @@ export default function ChatWindow({ contact }: ChatWindowProps) {
               className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                 message.senderId === 'user'
                   ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-300 text-gray-900 rounded-bl-none'
+                  : 'bg-gray-700 text-gray-100 rounded-bl-none'
               }`}
             >
               <p className="text-sm">{message.content}</p>
               <p className={`text-xs mt-1 ${
-                message.senderId === 'user' ? 'text-blue-100' : 'text-gray-600'
+                message.senderId === 'user' ? 'text-blue-100' : 'text-gray-400'
               }`}>
                 {message.timestamp.toLocaleTimeString([], {
                   hour: '2-digit',
@@ -108,14 +108,14 @@ export default function ChatWindow({ contact }: ChatWindowProps) {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white border-t border-gray-200 p-4">
+      <div className="bg-gray-900 border-t border-gray-800 p-4">
         <div className="flex gap-2">
           <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Type a message..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             rows={2}
           />
           <button
