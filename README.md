@@ -6,146 +6,93 @@ A modern, responsive messaging application built with Next.js, React, and Tailwi
 
 - 💬 Real-time messaging interface
 - 👥 Contact management with online/offline status
-- 📱 Responsive design that works on all devices
-- ⚡ Built with Next.js 14 and React 18
-- 🎨 Styled with Tailwind CSS
-- 🚀 TypeScript support for type safety
+- 🔍 Search bar to filter contacts
+- 🌓 Dark mode support
+- 📱 Fully responsive design
+- ⚡ Built with Next.js 14, React 18, TypeScript, and Tailwind CSS
 
-## Tech Stack
-
-- **Framework**: Next.js 14
-- **UI Library**: React 18
-- **Styling**: Tailwind CSS
-- **Language**: TypeScript
-- **Package Manager**: npm or yarn
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-
-- Node.js 18.17 or later
-- npm or yarn
+- Node.js 18.17+ and npm/yarn
 
 ### Installation
 
-1. Clone the repository:
 ```bash
 git clone https://github.com/SumedhaKun/ChitChatClient.git
 cd ChitChatClient
-```
-
-2. Install dependencies:
-```bash
 npm install
-# or
-yarn install
-```
-
-3. Run the development server:
-```bash
 npm run dev
-# or
-yarn dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Project Structure
 
 ```
 ChitChatClient/
 ├── app/
-│   ├── layout.tsx          # Root layout component
+│   ├── layout.tsx          # Root layout
 │   ├── page.tsx            # Main page
 │   └── globals.css         # Global styles
 ├── components/
-│   ├── Header.tsx          # Header component
-│   ├── Sidebar.tsx         # Contacts sidebar
-│   ├── ChatWindow.tsx      # Main chat interface
-│   └── MessageBubble.tsx   # Individual message bubble
+│   ├── Header.tsx          # Top navigation
+│   ├── Sidebar.tsx         # Contact list with search
+│   ├── ChatWindow.tsx      # Chat interface
+│   └── MessageBubble.tsx   # Message display
 ├── types/
-│   └── index.ts            # TypeScript type definitions
-├── tailwind.config.js      # Tailwind configuration
-├── postcss.config.js       # PostCSS configuration
-└── package.json            # Project dependencies
+│   └── index.ts            # TypeScript types
+└── package.json
 ```
 
 ## Components
 
-### Header
-Displays the application title and user profile avatar with a link to the profile page.
+| Component | Purpose |
+|-----------|---------|
+| **Header** | App title and user profile |
+| **Sidebar** | Contact list with search and status indicators |
+| **ChatWindow** | Message display, input, and send functionality |
+| **MessageBubble** | Individual message styling |
 
-### Sidebar
-Shows a list of all contacts with:
-- Contact avatar
-- Contact name
-- Online/offline status indicator
-- Selection highlighting
+## Key Features
 
-### ChatWindow
-The main messaging interface featuring:
-- Chat header with contact info
-- Message history with timestamps
-- Message input area
-- Send button
-- Keyboard support (Enter to send, Shift+Enter for new line)
+**Messaging**
+- Chronological message display with timestamps
+- Auto-scroll to latest message
+- Enter to send, Shift+Enter for new line
 
-### MessageBubble
-Individual message bubble component with styling based on message sender.
+**Contacts**
+- Search/filter contacts by name
+- Online/offline status indicators
+- Click to select and view conversation
 
-## Features in Detail
+**Dark Mode**
+- Toggle dark/light themes
+- Persistent theme preference
 
-### Message Handling
-- Messages are displayed in chronological order
-- User's messages appear on the right with blue background
-- Other messages appear on the left with gray background
-- Timestamps are displayed for each message
-- Auto-scroll to newest message
+**Search**
+- Real-time contact filtering
+- Case-insensitive search
 
-### Contact Selection
-- Click on any contact in the sidebar to view their conversation
-- Selected contact is highlighted
-- Contact status (online/offline) is shown in both sidebar and chat header
+## Tech Stack
 
-### Input Handling
-- Multi-line text input with resizable textarea
-- Press Enter to send message
-- Press Shift+Enter for new line
-- Input clears after sending
-
-## Customization
-
-### Colors
-Modify the color scheme in `tailwind.config.js` and component files:
-- Primary color: Blue-600 (`bg-blue-600`)
-- Secondary color: Gray-300 (`bg-gray-300`)
-
-### Fonts
-Default system fonts are used. To use custom fonts, import them in `app/globals.css`.
+- **Framework**: Next.js 14
+- **UI**: React 18 + Tailwind CSS
+- **Language**: TypeScript
+- **Styling**: Dark mode support with Tailwind
 
 ## Future Enhancements
 
-- Backend API integration for real message storage
-- User authentication and authorization
-- Message search functionality
+- Backend API integration
+- User authentication
 - File/image sharing
-- Typing indicators
-- Read receipts
+- Typing indicators & read receipts
 - Group conversations
-- Dark mode support
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is open source and available under the MIT License.
+MIT License - feel free to use this project!
 
 ## Author
 
 Sumedha Kundurthi
-
-## Support
-
-If you encounter any issues or have questions, please open an issue on the GitHub repository.
