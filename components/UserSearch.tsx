@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Contact } from '@/types'
+import type { User } from '@/types'
 
 interface UserSearchProps {
-  users: Contact[]
-  onSelectUser: (user: Contact) => void
+  users: User[]
+  onSelectUser: (user: User) => void
 }
 
 export default function UserSearch({ users, onSelectUser }: UserSearchProps) {
@@ -35,7 +35,7 @@ export default function UserSearch({ users, onSelectUser }: UserSearchProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const handleSelect = (user: Contact) => {
+  const handleSelect = (user: User) => {
     onSelectUser(user)
     setQuery('')
     setIsOpen(false)
@@ -83,7 +83,7 @@ export default function UserSearch({ users, onSelectUser }: UserSearchProps) {
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800 transition text-left"
                   >
                     <img
-                      src={user.avatar}
+                      src={user.profilePic}
                       alt={user.name}
                       className="w-9 h-9 rounded-full object-cover"
                     />

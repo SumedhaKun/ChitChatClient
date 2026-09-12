@@ -1,15 +1,33 @@
-export interface Contact {
-  id: number
+export type ActivityStatus = 'online' | 'offline'
+
+export interface User {
+  id: string
   name: string
   username: string
-  status: 'online' | 'offline'
-  avatar: string
+  activityStatus: ActivityStatus
+  profilePic: string
+  email?: string
+  bio?: string
+}
+
+export interface Conversation {
+  id: string
+  participantIds: string[]
+  name?: string
+  pic?: string
+  dateCreated: string
+  lastMessageAt?: string
+  isGroup: boolean
 }
 
 export interface Message {
-  id: number
-  senderId: number | 'user'
+  id: string
+  conversationId: string
+  senderId: string
   content: string
-  timestamp: Date
+  timestamp: string
+}
+
+export interface DisplayMessage extends Message {
   senderName: string
 }

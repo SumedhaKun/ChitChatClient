@@ -1,13 +1,15 @@
 'use client'
 
-import type { Message } from '@/types'
+import type { DisplayMessage } from '@/types'
+import { CURRENT_USER_ID } from '@/lib/users'
 
 interface MessageBubbleProps {
-  message: Message
-  isOwnMessage: boolean
+  message: DisplayMessage
 }
 
-export default function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
+export default function MessageBubble({ message }: MessageBubbleProps) {
+  const isOwnMessage = message.senderId === CURRENT_USER_ID
+
   return (
     <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
@@ -18,12 +20,8 @@ export default function MessageBubble({ message, isOwnMessage }: MessageBubblePr
         }`}
       >
         <p className="text-sm break-words">{message.content}</p>
-        <p
-          className={`text-xs mt-1 ${
-            isOwnMessage ? 'text-blue-100' : 'text-gray-400'
-          }`}
-        >
-          {message.timestamp.toLocaleTimeString([], {
+        <p className={`text-xs mt-1 ${isOwnMessage ? 'text-blue-100' : 'text-gray-400'}`}>
+          {new Date(message.timestamp).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
           })}

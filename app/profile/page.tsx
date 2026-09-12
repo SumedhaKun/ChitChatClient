@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { currentUser } from '@/data/currentUser'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -18,15 +19,17 @@ export default function ProfilePage() {
 
       <div className="max-w-xl mx-auto mt-10 p-8 bg-gray-900 border border-gray-800 rounded-lg text-center">
         <img
-          src="https://api.dicebear.com/7.x/avataaars/svg?seed=User"
-          alt="Profile"
+          src={currentUser.profilePic}
+          alt={currentUser.name}
           className="w-28 h-28 rounded-full mx-auto mb-5 object-cover border-2 border-gray-700"
         />
-        <h1 className="text-2xl font-bold text-gray-100 mb-2">Your Profile</h1>
-        <p className="text-gray-400 mb-2">Username: User123</p>
-        <p className="text-gray-400 mb-2">Email: user@example.com</p>
-        <p className="text-green-400 mb-2">Status: Online</p>
-        <p className="text-gray-400 mb-8">Joined: January 2024</p>
+        <h1 className="text-2xl font-bold text-gray-100 mb-1">{currentUser.name}</h1>
+        <p className="text-gray-400 mb-2">@{currentUser.username}</p>
+        {currentUser.email && <p className="text-gray-400 mb-2">{currentUser.email}</p>}
+        <p className="text-green-400 mb-2">
+          {currentUser.activityStatus === 'online' ? '● Online' : '○ Offline'}
+        </p>
+        {currentUser.bio && <p className="text-gray-300 mb-8">{currentUser.bio}</p>}
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
