@@ -14,6 +14,8 @@ import {
   findDirectConversation,
 } from '@/lib/conversations'
 import { CURRENT_USER_ID } from '@/lib/users'
+import { useMessageServer } from '@/hooks/useMessageServer'
+import { MessageServerError } from '@/lib/messageServer'
 import type { Conversation, Message, User } from '@/types'
 
 function buildInitialMessages(): Record<string, Message[]> {
@@ -31,6 +33,7 @@ export default function Home() {
   )
   const [selectedConversationId, setSelectedConversationId] = useState(initialConversations[0].id)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const { sendMessage: sendToServer, isConnected, lastError } = useMessageServer()
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId)
 
@@ -50,7 +53,7 @@ export default function Home() {
   const handleCreateGroup = (name: string, memberIds: string[]) => {
     const newConversation = createGroupConversation(name, memberIds)
     const welcomeMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: crypto.randomUUID(),
       conversationId: newConversation.id,
       senderId: CURRENT_USER_ID,
       content: 'Group chat created!',
@@ -66,27 +69,42 @@ export default function Home() {
     setShowCreateGroup(false)
   }
 
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
+  const handleSendMessage = async (content: string) => {
+    const messageId = crypto.randomUUID()
+    const timestamp = new Date().toISOString()
+    const optimisticMessage: Message = {
+      id: messageId,
       conversationId: selectedConversationId,
       senderId: CURRENT_USER_ID,
       content,
-      timestamp: new Date().toISOString(),
+      timestamp,
     }
 
     setMessagesByConversation((prev) => ({
       ...prev,
-      [selectedConversationId]: [...(prev[selectedConversationId] ?? []), newMessage],
+      [selectedConversationId]: [...(prev[selectedConversationId] ?? []), optimisticMessage],
     }))
 
     setConversations((prev) =>
       prev.map((c) =>
-        c.id === selectedConversationId
-          ? { ...c, lastMessageAt: newMessage.timestamp }
-          : c
+        c.id === selectedConversationId ? { ...c, lastMessageAt: timestamp } : c
       )
     )
+
+    try {
+      await sendToServer(selectedConversationId, content, messageId)
+    } catch (error: unknown) {
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [selectedConversationId]: (prev[selectedConversationId] ?? []).filter(
+          (message) => message.id !== messageId
+        ),
+      }))
+
+      if (error instanceof MessageServerError) {
+        console.error('Message server rejected message:', error.code, error.message)
+      }
+    }
   }
 
   if (!selectedConversation) return null
@@ -106,6 +124,8 @@ export default function Home() {
           conversation={selectedConversation}
           messages={messagesByConversation[selectedConversationId] ?? []}
           onSendMessage={handleSendMessage}
+          isServerConnected={isConnected}
+          sendError={lastError}
         />
       </div>
 

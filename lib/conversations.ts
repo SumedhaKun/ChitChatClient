@@ -25,7 +25,7 @@ export function findDirectConversation(
 
 export function createDirectConversation(otherUserId: string): Conversation {
   return {
-    id: `conv-dm-${otherUserId}`,
+    id: crypto.randomUUID(),
     participantIds: [CURRENT_USER_ID, otherUserId],
     dateCreated: new Date().toISOString(),
     isGroup: false,
@@ -35,7 +35,7 @@ export function createDirectConversation(otherUserId: string): Conversation {
 export function createGroupConversation(name: string, memberIds: string[]): Conversation {
   const participantIds = [CURRENT_USER_ID, ...memberIds.filter((id) => id !== CURRENT_USER_ID)]
   return {
-    id: `conv-group-${Date.now()}`,
+    id: crypto.randomUUID(),
     participantIds,
     name,
     dateCreated: new Date().toISOString(),
