@@ -13,3 +13,20 @@ export interface Message {
   timestamp: Date
   senderName: string
 }
+
+export interface GroupChat {
+  id: number
+  name: string
+  avatar: string
+  members: Contact[]
+  isGroup: true
+}
+
+export interface Conversation {
+  id: number
+  name: string
+  avatar: string
+  status?: 'online' | 'offline'
+  members?: Contact[]
+  isGroup: boolean
+}
