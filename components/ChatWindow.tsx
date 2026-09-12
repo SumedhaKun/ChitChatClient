@@ -5,12 +5,14 @@ import Link from 'next/link'
 import type { Conversation, Message } from '@/types'
 import { CURRENT_USER_ID, resolveUser } from '@/lib/users'
 import { getConversationDisplayName, getOtherParticipantId } from '@/lib/conversations'
-import { toDisplayMessages } from '@/lib/messages'
+import { MAX_MESSAGE_CONTENT_LENGTH, toDisplayMessages } from '@/lib/messages'
 
 interface ChatWindowProps {
   conversation: Conversation
   messages: Message[]
-  onSendMessage: (content: string) => void
+  onSendMessage: (content: string) => void | Promise<void>
+  isServerConnected?: boolean
+  sendError?: string | null
 }
 
 function UsernameLink({ senderId, senderName }: { senderId: string; senderName: string }) {
@@ -33,7 +35,13 @@ function UsernameLink({ senderId, senderName }: { senderId: string; senderName: 
   )
 }
 
-export default function ChatWindow({ conversation, messages, onSendMessage }: ChatWindowProps) {
+export default function ChatWindow({
+  conversation,
+  messages,
+  onSendMessage,
+  isServerConnected = false,
+  sendError = null,
+}: ChatWindowProps) {
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const displayMessages = toDisplayMessages(messages)
@@ -47,9 +55,13 @@ export default function ChatWindow({ conversation, messages, onSendMessage }: Ch
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const trimmedInput = inputValue.trim()
+  const isOverLimit = inputValue.length > MAX_MESSAGE_CONTENT_LENGTH
+  const canSend = trimmedInput.length > 0 && !isOverLimit
+
   const handleSendMessage = () => {
-    if (inputValue.trim()) {
-      onSendMessage(inputValue.trim())
+    if (canSend) {
+      onSendMessage(trimmedInput)
       setInputValue('')
     }
   }
@@ -149,18 +161,31 @@ export default function ChatWindow({ conversation, messages, onSendMessage }: Ch
       </div>
 
       <div className="bg-gray-900 border-t border-gray-800 p-4">
+        <div className="flex items-center justify-between mb-2 text-xs">
+          <span className={isServerConnected ? 'text-green-400' : 'text-gray-500'}>
+            {isServerConnected ? '● Connected to message server' : '○ Message server offline'}
+          </span>
+          {sendError && <span className="text-red-400">{sendError}</span>}
+        </div>
         <div className="flex gap-2">
-          <textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isGroup ? `Message ${displayName}...` : 'Type a message...'}
-            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            rows={2}
-          />
+          <div className="flex-1">
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              maxLength={MAX_MESSAGE_CONTENT_LENGTH}
+              placeholder={isGroup ? `Message ${displayName}...` : 'Type a message...'}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              rows={2}
+            />
+            <p className={`text-xs mt-1 text-right ${isOverLimit ? 'text-red-400' : 'text-gray-500'}`}>
+              {inputValue.length}/{MAX_MESSAGE_CONTENT_LENGTH}
+            </p>
+          </div>
           <button
             onClick={handleSendMessage}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors self-end"
+            disabled={!canSend}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg font-medium transition-colors self-end"
           >
             Send
           </button>
