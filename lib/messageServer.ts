@@ -5,10 +5,23 @@ import type {
   ServerErrorResponse,
 } from '@/types/messageServer'
 
-const DEFAULT_WS_URL = 'ws://localhost:8080'
+const LOCAL_WS_URL = 'ws://localhost:8080'
 
 export function getMessageServerUrl(): string {
-  return process.env.NEXT_PUBLIC_MESSAGE_SERVER_URL ?? DEFAULT_WS_URL
+  if (process.env.NEXT_PUBLIC_MESSAGE_SERVER_URL) {
+    return process.env.NEXT_PUBLIC_MESSAGE_SERVER_URL
+  }
+
+  if (typeof window !== 'undefined') {
+    const { hostname, host, protocol } = window.location
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1'
+    if (!isLocal) {
+      const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${wsProtocol}//${host}/api/server`
+    }
+  }
+
+  return LOCAL_WS_URL
 }
 
 export class MessageServerError extends Error {
