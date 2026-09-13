@@ -43,6 +43,39 @@ export default function RegisterPage() {
 
     setLoading(true)
     const supabase = createClient()
+
+    if (isSignUp && process.env.NODE_ENV === 'development') {
+      const emailTrimmed = email.trim()
+      const devSignup = await fetch('/api/dev/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailTrimmed, password }),
+      })
+
+      const payload = (await devSignup.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null
+
+      if (!devSignup.ok || !payload?.ok) {
+        setError(payload?.error ?? 'Dev signup failed')
+        setLoading(false)
+        return
+      }
+
+      const signIn = await supabase.auth.signInWithPassword({
+        email: emailTrimmed,
+        password,
+      })
+      if (signIn.error) {
+        setError(signIn.error.message)
+        setLoading(false)
+        return
+      }
+
+      router.replace('/onboarding')
+      return
+    }
+
     const result = isSignUp
       ? await supabase.auth.signUp({
           email,
