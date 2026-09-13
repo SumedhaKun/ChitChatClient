@@ -39,8 +39,23 @@ export type MessageHistory = {
 }
 
 type ErrorBody = {
-  error?: { message?: string }
+  error?: {
+    code?: string
+    message?: string
+    details?: Array<{ field: string; message: string }>
+  }
   message?: string
+}
+
+export class MessageServiceError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly details?: Array<{ field: string; message: string }>
+  ) {
+    super(message)
+    this.name = 'MessageServiceError'
+  }
 }
 
 async function request<T>(
@@ -59,12 +74,29 @@ async function request<T>(
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorBody
-    throw new Error(
-      body.error?.message ?? body.message ?? `Message service request failed (${response.status})`
+    throw new MessageServiceError(
+      body.error?.message ?? body.message ?? `Message service request failed (${response.status})`,
+      body.error?.code ?? `HTTP_${response.status}`,
+      body.error?.details
     )
   }
 
   return response.json() as Promise<T>
+}
+
+export async function createMessage(
+  accessToken: string,
+  input: { messageId: string; conversationId: string; content: string }
+): Promise<ApiMessage> {
+  const { message } = await request<{ message: ApiMessage }>('/message', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      message_id: input.messageId,
+      conversation_id: input.conversationId,
+      content: input.content,
+    }),
+  })
+  return message
 }
 
 export async function listConversations(accessToken: string): Promise<ApiConversation[]> {
