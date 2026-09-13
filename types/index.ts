@@ -20,12 +20,15 @@ export interface Conversation {
   isGroup: boolean
 }
 
+export type DeliveryState = 'pending' | 'sent' | 'failed'
+
 export interface Message {
   id: string
   conversationId: string
   senderId: string
   content: string
   timestamp: string
+  deliveryState?: DeliveryState
 }
 
 export interface DisplayMessage extends Message {

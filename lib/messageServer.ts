@@ -5,10 +5,10 @@ import type {
   ServerErrorResponse,
 } from '@/types/messageServer'
 
-const DEFAULT_WS_URL = 'ws://localhost:8080'
+const LOCAL_WS_URL = 'ws://localhost:8080'
 
 export function getMessageServerUrl(): string {
-  return process.env.NEXT_PUBLIC_MESSAGE_SERVER_URL ?? DEFAULT_WS_URL
+  return process.env.NEXT_PUBLIC_MESSAGE_SERVER_URL ?? LOCAL_WS_URL
 }
 
 export class MessageServerError extends Error {
@@ -24,19 +24,30 @@ export class MessageServerError extends Error {
 }
 
 type PendingRequest = {
+  payload: OutgoingMessagePayload
   resolve: (ack: MessageAck) => void
   reject: (error: MessageServerError) => void
+  sentOn?: WebSocket
 }
 
 export class MessageServerClient {
   private socket: WebSocket | null = null
   private connectPromise: Promise<void> | null = null
   private pending = new Map<string, PendingRequest>()
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempts = 0
+  private manuallyDisconnected = false
+  private authenticated = false
+  private listeners = new Set<(connected: boolean, error?: string) => void>()
 
-  constructor(private readonly url: string = getMessageServerUrl()) {}
+  constructor(
+    private accessToken: string,
+    private readonly url: string = getMessageServerUrl()
+  ) {}
 
   connect(): Promise<void> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
+    this.manuallyDisconnected = false
+    if (this.socket?.readyState === WebSocket.OPEN && this.authenticated) {
       return Promise.resolve()
     }
 
@@ -46,26 +57,30 @@ export class MessageServerClient {
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(this.url)
+      this.socket = socket
 
       socket.addEventListener('open', () => {
-        this.socket = socket
-        this.connectPromise = null
-        resolve()
+        socket.send(JSON.stringify({ type: 'auth', accessToken: this.accessToken }))
       })
 
       socket.addEventListener('message', (event) => {
-        this.handleMessage(event.data)
+        this.handleMessage(event.data, resolve, reject)
       })
 
       socket.addEventListener('close', () => {
+        const wasAuthenticated = this.authenticated
         this.socket = null
+        this.authenticated = false
         this.connectPromise = null
-        this.rejectAllPending('WebSocket connection closed')
+        this.emit(false, wasAuthenticated ? 'Message connection interrupted; retrying…' : undefined)
+        if (!this.manuallyDisconnected) this.scheduleReconnect()
       })
 
       socket.addEventListener('error', () => {
-        this.connectPromise = null
-        reject(new MessageServerError('Failed to connect to message server', 'CONNECTION_ERROR'))
+        if (!this.authenticated) {
+          this.connectPromise = null
+          reject(new MessageServerError('Failed to connect to message server', 'CONNECTION_ERROR'))
+        }
       })
     })
 
@@ -73,35 +88,68 @@ export class MessageServerClient {
   }
 
   async send(payload: OutgoingMessagePayload): Promise<MessageAck> {
-    await this.connect()
-
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      throw new MessageServerError('Message server is not connected', 'NOT_CONNECTED')
-    }
-
     return new Promise<MessageAck>((resolve, reject) => {
-      this.pending.set(payload.messageId, { resolve, reject })
-      this.socket!.send(JSON.stringify(payload))
+      const existing = this.pending.get(payload.messageId)
+      if (existing) {
+        reject(new MessageServerError('Message is already queued', 'DUPLICATE_CLIENT_ID', payload.messageId))
+        return
+      }
+      this.pending.set(payload.messageId, { payload, resolve, reject })
+      if (this.isConnected()) {
+        this.flushQueue()
+      } else {
+        this.connect().catch(() => this.scheduleReconnect())
+      }
     })
   }
 
   disconnect(): void {
+    this.manuallyDisconnected = true
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
     this.socket?.close()
     this.socket = null
+    this.authenticated = false
     this.connectPromise = null
-    this.rejectAllPending('Message server disconnected')
+    this.rejectAllPending('Message server disconnected', 'DISCONNECTED')
   }
 
   isConnected(): boolean {
-    return this.socket?.readyState === WebSocket.OPEN
+    return this.socket?.readyState === WebSocket.OPEN && this.authenticated
   }
 
-  private handleMessage(raw: unknown): void {
+  setAccessToken(accessToken: string): void {
+    if (accessToken === this.accessToken) return
+    this.accessToken = accessToken
+    this.socket?.close()
+  }
+
+  subscribe(listener: (connected: boolean, error?: string) => void): () => void {
+    this.listeners.add(listener)
+    listener(this.isConnected())
+    return () => this.listeners.delete(listener)
+  }
+
+  private handleMessage(
+    raw: unknown,
+    resolveConnect: () => void,
+    rejectConnect: (error: MessageServerError) => void
+  ): void {
     let response: MessageServerResponse
     try {
       response = JSON.parse(String(raw)) as MessageServerResponse
     } catch {
-      this.rejectAllPending('Invalid response from message server')
+      this.emit(this.isConnected(), 'Invalid response from message server')
+      return
+    }
+
+    if (response.type === 'auth_ack') {
+      this.authenticated = true
+      this.connectPromise = null
+      this.reconnectAttempts = 0
+      this.emit(true)
+      resolveConnect()
+      this.flushQueue()
       return
     }
 
@@ -109,7 +157,16 @@ export class MessageServerClient {
       const pending = this.pending.get(response.messageId)
       if (pending) {
         this.pending.delete(response.messageId)
-        pending.resolve(response)
+        pending.resolve({
+          ...response,
+          message: {
+            ...response.message,
+            createdAt:
+              typeof response.message.createdAt === 'string'
+                ? response.message.createdAt
+                : new Date(response.message.createdAt as unknown as string).toISOString(),
+          },
+        })
       }
       return
     }
@@ -117,22 +174,62 @@ export class MessageServerClient {
     if (response.type === 'error') {
       if (response.messageId) {
         const pending = this.pending.get(response.messageId)
-        if (pending) {
+        if (pending && this.isNonRetryable(response.code)) {
           this.pending.delete(response.messageId)
           pending.reject(
             new MessageServerError(response.message, response.code, response.messageId, response.details)
           )
         }
+        if (pending) this.socket?.close()
         return
       }
 
-      this.rejectAllPending(response.message)
+      if (!this.authenticated) {
+        const error = new MessageServerError(response.message, response.code)
+        this.connectPromise = null
+        this.manuallyDisconnected = this.isNonRetryable(response.code)
+        rejectConnect(error)
+        this.emit(false, response.message)
+        if (this.manuallyDisconnected) {
+          this.rejectAllPending(response.message, response.code)
+          this.socket?.close()
+        }
+      } else {
+        this.emit(true, response.message)
+      }
     }
   }
 
-  private rejectAllPending(reason: string): void {
+  private flushQueue(): void {
+    if (!this.socket || !this.isConnected()) return
+    this.pending.forEach((pending) => {
+      if (pending.sentOn === this.socket) return
+      this.socket!.send(JSON.stringify(pending.payload))
+      pending.sentOn = this.socket!
+    })
+  }
+
+  private scheduleReconnect(): void {
+    if (this.manuallyDisconnected || this.reconnectTimer) return
+    const delay = Math.min(30_000, 500 * 2 ** this.reconnectAttempts)
+    this.reconnectAttempts += 1
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      this.connect().catch(() => this.scheduleReconnect())
+    }, delay)
+  }
+
+  private isNonRetryable(code: string): boolean {
+    return /AUTH|VALID|MEMBER|FORBIDDEN|CONFLICT|DUPLICATE|NOT_FOUND|CONTENT|MESSAGE_ID/i.test(code)
+  }
+
+  private emit(connected: boolean, error?: string): void {
+    this.listeners.forEach((listener) => listener(connected, error))
+  }
+
+  private rejectAllPending(reason: string, code: string): void {
     this.pending.forEach((pending, messageId) => {
-      pending.reject(new MessageServerError(reason, 'CONNECTION_ERROR', messageId))
+      pending.reject(new MessageServerError(reason, code, messageId))
     })
     this.pending.clear()
   }
@@ -140,9 +237,11 @@ export class MessageServerClient {
 
 let client: MessageServerClient | null = null
 
-export function getMessageServerClient(): MessageServerClient {
+export function getMessageServerClient(accessToken: string): MessageServerClient {
   if (!client) {
-    client = new MessageServerClient()
+    client = new MessageServerClient(accessToken)
+  } else {
+    client.setAccessToken(accessToken)
   }
   return client
 }

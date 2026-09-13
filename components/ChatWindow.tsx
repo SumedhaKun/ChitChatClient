@@ -2,10 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import type { Conversation, Message } from '@/types'
-import { CURRENT_USER_ID, resolveUser } from '@/lib/users'
+import type { Conversation, Message, User } from '@/types'
 import { getConversationDisplayName, getOtherParticipantId } from '@/lib/conversations'
-import { MAX_MESSAGE_CONTENT_LENGTH, toDisplayMessages } from '@/lib/messages'
+import { MAX_MESSAGE_CONTENT_LENGTH } from '@/lib/messages'
 
 interface ChatWindowProps {
   conversation: Conversation
@@ -13,21 +12,32 @@ interface ChatWindowProps {
   onSendMessage: (content: string) => void | Promise<void>
   isServerConnected?: boolean
   sendError?: string | null
+  currentUserId: string
+  users: User[]
 }
 
-function UsernameLink({ senderId, senderName }: { senderId: string; senderName: string }) {
-  if (senderId === CURRENT_USER_ID) {
+function UsernameLink({
+  senderId,
+  senderName,
+  currentUserId,
+  user,
+}: {
+  senderId: string
+  senderName: string
+  currentUserId: string
+  user?: User
+}) {
+  if (senderId === currentUserId) {
     return <span className="text-xs font-medium text-blue-300">{senderName}</span>
   }
 
-  const user = resolveUser(senderId)
   if (!user) {
     return <span className="text-xs font-medium text-gray-300">{senderName}</span>
   }
 
   return (
     <Link
-      href={`/contact/${user.username}`}
+      href={`/contact/${user.id}`}
       className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline"
     >
       {senderName}
@@ -41,15 +51,21 @@ export default function ChatWindow({
   onSendMessage,
   isServerConnected = false,
   sendError = null,
+  currentUserId,
+  users,
 }: ChatWindowProps) {
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const displayMessages = toDisplayMessages(messages)
+  const resolveUser = (id: string) => users.find((user) => user.id === id)
+  const displayMessages = messages.map((message) => ({
+    ...message,
+    senderName: message.senderId === currentUserId ? 'You' : resolveUser(message.senderId)?.name ?? 'Unknown',
+  }))
 
   const isGroup = conversation.isGroup
-  const otherId = getOtherParticipantId(conversation)
+  const otherId = getOtherParticipantId(conversation, currentUserId)
   const otherUser = otherId ? resolveUser(otherId) : undefined
-  const displayName = getConversationDisplayName(conversation, CURRENT_USER_ID, resolveUser)
+  const displayName = getConversationDisplayName(conversation, currentUserId, resolveUser)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -98,7 +114,7 @@ export default function ChatWindow({
             <div>
               {otherUser ? (
                 <Link
-                  href={`/contact/${otherUser.username}`}
+                  href={`/contact/${otherUser.id}`}
                   className="font-semibold text-gray-100 hover:text-blue-400 hover:underline"
                 >
                   {otherUser.name}
@@ -109,7 +125,7 @@ export default function ChatWindow({
               {otherUser && (
                 <p className="text-xs">
                   <Link
-                    href={`/contact/${otherUser.username}`}
+                    href={`/contact/${otherUser.id}`}
                     className="text-gray-400 hover:text-blue-400 hover:underline"
                   >
                     @{otherUser.username}
@@ -127,7 +143,7 @@ export default function ChatWindow({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {displayMessages.map((message) => {
-          const isOwnMessage = message.senderId === CURRENT_USER_ID
+          const isOwnMessage = message.senderId === currentUserId
 
           return (
             <div
@@ -136,7 +152,12 @@ export default function ChatWindow({
             >
               {!isOwnMessage && (
                 <div className="mb-1 ml-1">
-                  <UsernameLink senderId={message.senderId} senderName={message.senderName} />
+                  <UsernameLink
+                    senderId={message.senderId}
+                    senderName={message.senderName}
+                    currentUserId={currentUserId}
+                    user={resolveUser(message.senderId)}
+                  />
                 </div>
               )}
               <div
@@ -152,6 +173,15 @@ export default function ChatWindow({
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
+                  {isOwnMessage && message.deliveryState && (
+                    <span className="ml-2">
+                      {message.deliveryState === 'pending'
+                        ? 'Sending…'
+                        : message.deliveryState === 'sent'
+                          ? 'Sent'
+                          : 'Failed'}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>

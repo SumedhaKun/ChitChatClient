@@ -1,7 +1,6 @@
 'use client'
 
-import type { Conversation } from '@/types'
-import { CURRENT_USER_ID, resolveUser } from '@/lib/users'
+import type { Conversation, User } from '@/types'
 import {
   getConversationDisplayName,
   getOtherParticipantId,
@@ -12,6 +11,8 @@ interface SidebarProps {
   selectedConversationId: string
   onSelectConversation: (id: string) => void
   onCreateGroup: () => void
+  currentUserId: string
+  users: User[]
 }
 
 export default function Sidebar({
@@ -19,7 +20,10 @@ export default function Sidebar({
   selectedConversationId,
   onSelectConversation,
   onCreateGroup,
+  currentUserId,
+  users,
 }: SidebarProps) {
+  const resolveUser = (id: string) => users.find((user) => user.id === id)
   const groupConversations = conversations.filter((c) => c.isGroup)
   const directConversations = conversations.filter((c) => !c.isGroup)
 
@@ -60,7 +64,7 @@ export default function Sidebar({
                   </div>
                   <div className="flex-1 text-left min-w-0">
                     <h3 className="text-sm font-medium text-gray-100 truncate">
-                      {getConversationDisplayName(conversation, CURRENT_USER_ID, resolveUser)}
+                      {getConversationDisplayName(conversation, currentUserId, resolveUser)}
                     </h3>
                     <p className="text-xs text-gray-500">{conversation.participantIds.length} members</p>
                   </div>
@@ -75,7 +79,7 @@ export default function Sidebar({
         <p className="px-4 pt-3 pb-1 text-xs font-medium text-gray-500 uppercase tracking-wide">Direct Messages</p>
         <ul>
           {directConversations.map((conversation) => {
-            const otherId = getOtherParticipantId(conversation)
+            const otherId = getOtherParticipantId(conversation, currentUserId)
             const otherUser = otherId ? resolveUser(otherId) : undefined
 
             return (

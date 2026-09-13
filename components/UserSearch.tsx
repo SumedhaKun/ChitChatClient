@@ -1,28 +1,43 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { User } from '@/types'
 
 interface UserSearchProps {
-  users: User[]
+  onSearch: (query: string) => Promise<User[]>
   onSelectUser: (user: User) => void
 }
 
-export default function UserSearch({ users, onSelectUser }: UserSearchProps) {
+export default function UserSearch({ onSearch, onSelectUser }: UserSearchProps) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const [results, setResults] = useState<User[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [error, setError] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const results = useMemo(() => {
-    const trimmed = query.trim().toLowerCase()
-    if (!trimmed) return []
-
-    return users.filter(
-      (user) =>
-        user.username.toLowerCase().includes(trimmed) ||
-        user.name.toLowerCase().includes(trimmed)
-    )
-  }, [query, users])
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      setResults([])
+      return
+    }
+    let active = true
+    const timer = setTimeout(() => {
+      setIsSearching(true)
+      setError('')
+      onSearch(trimmed)
+        .then((users) => active && setResults(users))
+        .catch((cause: unknown) => {
+          if (active) setError(cause instanceof Error ? cause.message : 'Search failed')
+        })
+        .finally(() => active && setIsSearching(false))
+    }, 250)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [query, onSearch])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -73,7 +88,11 @@ export default function UserSearch({ users, onSelectUser }: UserSearchProps) {
 
       {isOpen && query.trim() && (
         <div className="absolute left-6 right-6 top-full mt-1 max-w-xl bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
-          {results.length > 0 ? (
+          {isSearching ? (
+            <p className="px-4 py-3 text-sm text-gray-500">Searching…</p>
+          ) : error ? (
+            <p className="px-4 py-3 text-sm text-red-400">{error}</p>
+          ) : results.length > 0 ? (
             <ul>
               {results.map((user) => (
                 <li key={user.id}>
