@@ -11,15 +11,17 @@ import { allUsers } from '@/data/users'
 import { initialConversations, getInitialMessages } from '@/data/conversations'
 import { findDirectConversation } from '@/lib/conversations'
 import { currentUser } from '@/data/currentUser'
-import { useMessageServer } from '@/hooks/useMessageServer'
-import { MessageServerError } from '@/lib/messageServer'
+import { useDeliveryService } from '@/hooks/useDeliveryService'
 import { createClient } from '@/lib/supabase/client'
+import { toClientMessage, upsertConversationMessage } from '@/lib/messages'
 import { getMyProfile, getPublicProfile, searchUsers, type PublicUserProfile } from '@/lib/userService'
 import {
   createConversation,
+  createMessage,
   getConversationMessages,
   getConversationParticipantIds,
   listConversations,
+  MessageServiceError,
   type ApiConversation,
 } from '@/lib/messageService'
 import type { Conversation, Message, User } from '@/types'
@@ -45,7 +47,23 @@ export default function Home() {
   const [actionError, setActionError] = useState('')
   const [fallbackReason, setFallbackReason] = useState('')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
-  const { sendMessage: sendToServer, isConnected, lastError } = useMessageServer(accessToken)
+  const { isConnected, lastError } = useDeliveryService(accessToken, (delivered) => {
+    const incoming = toClientMessage({
+      id: delivered.messageId,
+      conversationId: delivered.conversationId,
+      senderId: delivered.senderId,
+      content: delivered.content,
+      createdAt: delivered.createdAt,
+    })
+    setMessagesByConversation((prev) => upsertConversationMessage(prev, incoming))
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === incoming.conversationId
+          ? { ...conversation, lastMessageAt: incoming.timestamp }
+          : conversation
+      )
+    )
+  })
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId)
 
@@ -110,14 +128,15 @@ export default function Home() {
       const messageMap = Object.fromEntries(
         apiConversations.map((conversation, index) => [
           conversation.id,
-          histories[index].messages.slice().reverse().map((message) => ({
-            id: message.id,
-            conversationId: message.conversationId,
-            senderId: message.senderId,
-            content: message.content,
-            timestamp: message.createdAt,
-            deliveryState: 'sent' as const,
-          })),
+          histories[index].messages.slice().reverse().map((message) =>
+            toClientMessage({
+              id: message.id,
+              conversationId: message.conversationId,
+              senderId: message.senderId,
+              content: message.content,
+              createdAt: message.createdAt,
+            })
+          ),
         ])
       )
       const mappedUsers = [toUser(me), ...profiles.filter(isProfile).map(toUser)]
@@ -244,20 +263,23 @@ export default function Home() {
         }))
         return
       }
-      const ack = await sendToServer(selectedConversationId, content, messageId)
+      setActionError('')
+      const persisted = await createMessage(accessToken, {
+        messageId,
+        conversationId: selectedConversationId,
+        content,
+      })
       setMessagesByConversation((prev) => ({
         ...prev,
         [selectedConversationId]: (prev[selectedConversationId] ?? []).map((message) =>
           message.id === messageId
-            ? {
-                ...message,
-                id: ack.message.id,
-                senderId: ack.message.senderId,
-                conversationId: ack.message.conversationId,
-                content: ack.message.content,
-                timestamp: ack.message.createdAt,
-                deliveryState: 'sent',
-              }
+            ? toClientMessage({
+                id: persisted.id,
+                conversationId: persisted.conversationId,
+                senderId: persisted.senderId,
+                content: persisted.content,
+                createdAt: persisted.createdAt,
+              })
             : message
         ),
       }))
@@ -269,8 +291,11 @@ export default function Home() {
         ),
       }))
 
-      if (error instanceof MessageServerError) {
-        console.error('Message server rejected message:', error.code, error.message)
+      setActionError(
+        error instanceof MessageServiceError ? error.message : 'Unable to send message'
+      )
+      if (error instanceof MessageServiceError) {
+        console.error('Message service rejected message:', error.code, error.message)
       }
     }
   }

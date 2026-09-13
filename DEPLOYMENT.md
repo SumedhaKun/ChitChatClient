@@ -1,9 +1,10 @@
 # Deployment
 
 ChitChat Client and User Service deploy to [Vercel](https://vercel.com). The
-Message Service deploys as a Render web service so it can maintain persistent
-WebSocket connections. Preview and production client deploys are handled by
-the Vercel GitHub integration; GitHub Actions runs build checks only.
+Message Service deploys as HTTP-only. The Delivery Service deploys as a Render
+web service so it can maintain persistent WebSocket connections. Preview and
+production client deploys are handled by the Vercel GitHub integration; GitHub
+Actions runs build checks only.
 
 ## What runs on each pull request
 
@@ -20,14 +21,15 @@ Set these variables in the Vercel production environment before deploying:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_MESSAGE_SERVICE_URL=https://your-message-service.onrender.com
-NEXT_PUBLIC_MESSAGE_SERVER_URL=wss://your-message-service.onrender.com
+NEXT_PUBLIC_DELIVERY_SERVICE_URL=wss://your-delivery-service.onrender.com
 NEXT_PUBLIC_USER_SERVICE_URL=https://your-user-service.vercel.app
 ```
 
 `NEXT_PUBLIC_*` values are embedded during `next build`, so redeploy the client
-after changing them. The WebSocket URL must use `wss://` in production and
-connects directly to the message service root. Local development defaults to
-`ws://localhost:8080`.
+after changing them. The delivery WebSocket URL must use `wss://` in production
+and connects directly to the delivery service root. Local development defaults
+to `ws://localhost:8082`. Messages are sent with `POST /message` on the message
+service.
 
 On the Vercel User Service, set `CLIENT_ORIGIN` to the production client
 origin, without a trailing slash:
@@ -67,13 +69,15 @@ vercel link
 2. Deploy the User Service to Vercel and confirm its `/health` endpoint.
 3. Deploy the Message Service Render Blueprint and confirm its `/health`
    endpoint.
-4. Set both backend service URLs in the client Vercel environment.
-5. Set the User Service's `CLIENT_ORIGIN` and the Supabase URL allowlist.
-6. Redeploy the Vercel client.
-7. Smoke-test authentication, REST calls, and WebSocket reconnect behavior.
+4. Deploy the Delivery Service and confirm its `/health` endpoint.
+5. Set the backend service URLs in the client Vercel environment.
+6. Set the User Service's `CLIENT_ORIGIN` and the Supabase URL allowlist.
+7. Redeploy the Vercel client.
+8. Smoke-test authentication, REST sends, and delivery WebSocket reconnect
+   behavior.
 
 Free Render services spin down after 15 minutes without inbound traffic and can
-take about a minute to wake. Upgrade the message service to an always-on plan
+take about a minute to wake. Upgrade the delivery service to an always-on plan
 before depending on real-time availability.
 
 ## Local production build

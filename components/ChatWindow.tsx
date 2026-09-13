@@ -193,7 +193,7 @@ export default function ChatWindow({
       <div className="bg-gray-900 border-t border-gray-800 p-4">
         <div className="flex items-center justify-between mb-2 text-xs">
           <span className={isServerConnected ? 'text-green-400' : 'text-gray-500'}>
-            {isServerConnected ? '● Connected to message server' : '○ Message server offline'}
+            {isServerConnected ? '● Connected to delivery service' : '○ Delivery service offline'}
           </span>
           {sendError && <span className="text-red-400">{sendError}</span>}
         </div>
