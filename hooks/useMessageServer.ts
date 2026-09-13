@@ -3,12 +3,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getMessageServerClient, MessageServerError } from '@/lib/messageServer'
 
-export function useMessageServer() {
+export function useMessageServer(accessToken: string | null) {
   const [isConnected, setIsConnected] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
 
   useEffect(() => {
-    const client = getMessageServerClient()
+    if (!accessToken) {
+      setIsConnected(false)
+      return
+    }
+    const client = getMessageServerClient(accessToken)
+    const unsubscribe = client.subscribe((connected, error) => {
+      setIsConnected(connected)
+      setLastError(error ?? null)
+    })
 
     client
       .connect()
@@ -24,16 +32,20 @@ export function useMessageServer() {
       })
 
     return () => {
+      unsubscribe()
       client.disconnect()
       setIsConnected(false)
     }
-  }, [])
+  }, [accessToken])
 
   const sendMessage = useCallback(async (conversationId: string, content: string, messageId: string) => {
-    const client = getMessageServerClient()
+    if (!accessToken) {
+      throw new MessageServerError('Sign in to send messages', 'AUTH_REQUIRED')
+    }
+    const client = getMessageServerClient(accessToken)
 
     try {
-      await client.send({
+      const ack = await client.send({
         type: 'message',
         messageId,
         conversationId,
@@ -41,13 +53,14 @@ export function useMessageServer() {
       })
       setLastError(null)
       setIsConnected(true)
+      return ack
     } catch (error: unknown) {
       const message =
         error instanceof MessageServerError ? error.message : 'Failed to send message'
       setLastError(message)
       throw error
     }
-  }, [])
+  }, [accessToken])
 
   return { sendMessage, isConnected, lastError }
 }

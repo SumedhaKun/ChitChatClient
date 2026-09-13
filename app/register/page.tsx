@@ -1,19 +1,71 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+import { createClient } from '@/lib/supabase/client'
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSignUp, setIsSignUp] = useState(true)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleGoogleSignup = () => {
-    // Placeholder — no auth wired up yet
+  const handleGoogleSignup = async () => {
+    setError('')
+    setLoading(true)
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+      },
+    })
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+    }
   }
 
-  const handleEmailSignup = (e: React.FormEvent) => {
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Placeholder — no auth wired up yet
+    setError('')
+    setMessage('')
+
+    if (isSignUp && password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
+    setLoading(true)
+    const supabase = createClient()
+    const result = isSignUp
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+          },
+        })
+      : await supabase.auth.signInWithPassword({ email, password })
+
+    if (result.error) {
+      setError(result.error.message)
+      setLoading(false)
+      return
+    }
+
+    if (!result.data.session) {
+      setMessage('Check your email to confirm your account, then sign in.')
+      setLoading(false)
+      return
+    }
+
+    router.replace('/onboarding')
   }
 
   return (
@@ -21,12 +73,15 @@ export default function RegisterPage() {
       <div className="w-full max-w-md p-8 bg-gray-900 border border-gray-800 rounded-xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-100 tracking-wide">ChitChat</h1>
-          <p className="text-gray-400 mt-2">Create your account</p>
+          <p className="text-gray-400 mt-2">
+            {isSignUp ? 'Create your account' : 'Welcome back'}
+          </p>
         </div>
 
         <button
           type="button"
           onClick={handleGoogleSignup}
+          disabled={loading}
           className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-100 font-medium transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -64,6 +119,7 @@ export default function RegisterPage() {
             <input
               id="email"
               type="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -78,6 +134,8 @@ export default function RegisterPage() {
             <input
               id="password"
               type="password"
+              required
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -85,27 +143,50 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1.5">
-              Confirm password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {isSignUp && (
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-gray-300 mb-1.5"
+              >
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                required
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          {message && <p className="text-sm text-green-400">{message}</p>}
 
           <button
             type="submit"
+            disabled={loading}
             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
           >
-            Sign up
+            {loading ? 'Please wait…' : isSignUp ? 'Sign up' : 'Sign in'}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsSignUp((value) => !value)
+            setError('')
+            setMessage('')
+          }}
+          className="mt-5 w-full text-sm text-blue-400 hover:text-blue-300"
+        >
+          {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+        </button>
       </div>
     </div>
   )
