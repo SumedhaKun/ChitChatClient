@@ -3,6 +3,17 @@ export interface AuthRequest {
   accessToken: string
 }
 
+export interface ActivityRequest {
+  type: 'activity'
+  action: 'set' | 'delete'
+}
+
+export interface TypingRequest {
+  type: 'typing'
+  conversationId: string
+  isTyping: boolean
+}
+
 export interface AuthAck {
   type: 'auth_ack'
 }
@@ -20,10 +31,39 @@ export interface MessageCreatedFrame {
   message: DeliveredMessagePayload
 }
 
+export interface ActivityChangedFrame {
+  type: 'activity_changed'
+  userId: string
+  action: 'set' | 'delete' | 'timeout'
+}
+
+export interface ActivitySnapshotEntry {
+  userId: string
+  action: 'set'
+}
+
+export interface ActivitySnapshotFrame {
+  type: 'activity_snapshot'
+  users: ActivitySnapshotEntry[]
+}
+
+export interface TypingFrame {
+  type: 'typing'
+  userId: string
+  conversationId: string
+  isTyping: boolean
+}
+
 export interface ServerErrorResponse {
   type: 'error'
   code: string
   message: string
 }
 
-export type DeliveryServiceResponse = AuthAck | MessageCreatedFrame | ServerErrorResponse
+export type DeliveryServiceResponse =
+  | AuthAck
+  | MessageCreatedFrame
+  | ActivityChangedFrame
+  | ActivitySnapshotFrame
+  | TypingFrame
+  | ServerErrorResponse
