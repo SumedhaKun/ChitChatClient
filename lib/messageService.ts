@@ -27,6 +27,14 @@ export function getConversationParticipantIds(conversation: ApiConversation): st
   return conversation.memberIds ?? []
 }
 
+export function getMemberLastSeenMessageId(
+  conversation: ApiConversation,
+  userId: string
+): string | null {
+  const member = conversation.members?.find((entry) => entry.userId === userId)
+  return member?.lastSeenMessage ?? null
+}
+
 export type ApiMessage = {
   id: string
   senderId: string
