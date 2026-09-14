@@ -7,7 +7,7 @@ A modern, real-time messaging application built with Next.js and Supabase Auth, 
 ## Features
 
 - 💬 Real-time messaging over a WebSocket delivery service (live message delivery, typing indicators, online/offline presence)
-- 🔐 Authentication via Supabase (email/password and Google OAuth), with an onboarding flow for new accounts
+- 🔐 Authentication via Supabase (email/password), with an onboarding flow for new accounts
 - 👥 User search and one-on-one conversation creation
 - 👨‍👩‍👧 Group conversation creation with multiple members
 - ✅ Read receipts (last-seen message tracking per conversation)
@@ -24,10 +24,10 @@ ChitChat Client is the frontend for a small distributed system:
 | Service | Role |
 |---|---|
 | **Client** (this repo) | Next.js app: UI, auth flows, and orchestration between the other services |
-| **User Service** | Manages user profiles and search (`NEXT_PUBLIC_USER_SERVICE_URL`) |
-| **Message Service** | Stores conversations and messages, sent via REST (`NEXT_PUBLIC_MESSAGE_SERVICE_URL`) |
-| **Delivery Service** | Real-time delivery of messages, typing events, and presence over WebSocket (`NEXT_PUBLIC_DELIVERY_SERVICE_URL`) |
-| **Supabase** | Handles authentication (email/password + Google OAuth) and session management |
+| [**User Service**](https://github.com/SumedhaKun/ChitChatUserService) | Manages user profiles and search (`NEXT_PUBLIC_USER_SERVICE_URL`) |
+| [**Message Service**](https://github.com/SumedhaKun/ChitChatMessageService) | Validates and publishes conversations and messages, sent via REST (`NEXT_PUBLIC_MESSAGE_SERVICE_URL`) |
+| [**Delivery Service**](https://github.com/SumedhaKun/ChitChatDeliveryService) | Real-time delivery of messages, typing events, and presence over WebSocket (`NEXT_PUBLIC_DELIVERY_SERVICE_URL`) |
+| **Supabase** | Handles authentication (email/password) and session management + Stores the message and user data |
 
 If the message/user services or Supabase aren't configured, the app can fall back to local mock data (see `data/`) for local development.
 
@@ -124,8 +124,8 @@ ChitChatClient/
 - Search/filter your conversation list
 
 **Auth & Profiles**
-- Email/password and Google OAuth sign-in via Supabase
-- Guided onboarding to set up name, username, and profile picture on first login
+- Email/password sign-in via Supabase
+- Guided onboarding to set up name and username on first login
 - Editable personal profile page
 
 **Other**
