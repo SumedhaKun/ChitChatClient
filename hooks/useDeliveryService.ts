@@ -52,7 +52,7 @@ export function useDeliveryService(
         const current = new Set(previous[frame.conversationId] ?? [])
         if (frame.isTyping) current.add(frame.userId)
         else current.delete(frame.userId)
-        return { ...previous, [frame.conversationId]: [...current] }
+        return { ...previous, [frame.conversationId]: Array.from(current) }
       })
     })
     const unsubscribeActivityChanged = client.subscribeActivityChanged((frame) => {
