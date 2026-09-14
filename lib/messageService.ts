@@ -132,6 +132,33 @@ export async function createConversation(
   return conversation
 }
 
+export async function getOtherParticipantLastSeen(
+  accessToken: string,
+  conversationId: string
+): Promise<string | null> {
+  const { last_seen_message } = await request<{ last_seen_message: string | null }>(
+    `/conversation/${encodeURIComponent(conversationId)}/other-last-seen`,
+    accessToken
+  )
+  return last_seen_message
+}
+
+export async function markConversationSeen(
+  accessToken: string,
+  conversationId: string,
+  messageId: string
+): Promise<ConversationMember> {
+  const { member } = await request<{ member: ConversationMember }>(
+    `/conversation/${encodeURIComponent(conversationId)}/last-seen`,
+    accessToken,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ message_id: messageId }),
+    }
+  )
+  return member
+}
+
 export async function getConversationMessages(
   accessToken: string,
   conversationId: string,

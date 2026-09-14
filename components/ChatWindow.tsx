@@ -4,12 +4,13 @@ import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import type { Conversation, Message, User } from '@/types'
 import { getConversationDisplayName, getOtherParticipantId } from '@/lib/conversations'
-import { MAX_MESSAGE_CONTENT_LENGTH } from '@/lib/messages'
+import { getReadReceiptMessageId, MAX_MESSAGE_CONTENT_LENGTH } from '@/lib/messages'
 import { useOutgoingTyping } from '@/hooks/useOutgoingTyping'
 
 interface ChatWindowProps {
   conversation: Conversation
   messages: Message[]
+  otherLastSeenMessageId?: string | null
   onSendMessage: (content: string) => void | Promise<void>
   onSendTyping: (conversationId: string, isTyping: boolean) => void
   typingUserIds?: string[]
@@ -51,6 +52,7 @@ function UsernameLink({
 export default function ChatWindow({
   conversation,
   messages,
+  otherLastSeenMessageId = null,
   onSendMessage,
   onSendTyping,
   typingUserIds = [],
@@ -75,6 +77,10 @@ export default function ChatWindow({
   const typingNames = typingUserIds
     .filter((userId) => userId !== currentUserId)
     .map((userId) => resolveUser(userId)?.name ?? 'Someone')
+  const readReceiptMessageId =
+    !isGroup && otherLastSeenMessageId
+      ? getReadReceiptMessageId(messages, currentUserId, otherLastSeenMessageId)
+      : null
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -183,13 +189,15 @@ export default function ChatWindow({
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
-                  {isOwnMessage && message.deliveryState && (
+                  {isOwnMessage && (
                     <span className="ml-2">
                       {message.deliveryState === 'pending'
                         ? 'Sending…'
-                        : message.deliveryState === 'sent'
-                          ? 'Sent'
-                          : 'Failed'}
+                        : message.deliveryState === 'failed'
+                          ? 'Failed'
+                          : message.id === readReceiptMessageId
+                            ? 'Read'
+                            : 'Sent'}
                     </span>
                   )}
                 </p>

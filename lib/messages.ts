@@ -42,6 +42,33 @@ export function upsertMessage(messages: Message[], incoming: Message): Message[]
   )
 }
 
+export function compareMessages(a: Message, b: Message): number {
+  const byTime = a.timestamp.localeCompare(b.timestamp)
+  if (byTime !== 0) return byTime
+  return a.id.localeCompare(b.id)
+}
+
+export function getReadReceiptMessageId(
+  messages: Message[],
+  currentUserId: string,
+  otherLastSeenMessageId: string | null
+): string | null {
+  if (!otherLastSeenMessageId || messages.length === 0) return null
+
+  const sorted = [...messages].sort(compareMessages)
+  const seenIndex = sorted.findIndex((message) => message.id === otherLastSeenMessageId)
+  if (seenIndex === -1) return null
+
+  for (let index = seenIndex; index >= 0; index -= 1) {
+    const message = sorted[index]
+    if (message.senderId === currentUserId) {
+      return message.id
+    }
+  }
+
+  return null
+}
+
 export function upsertConversationMessage(
   messagesByConversation: Record<string, Message[]>,
   incoming: Message
