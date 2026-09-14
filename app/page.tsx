@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ChatWindow from '@/components/ChatWindow'
 import Sidebar from '@/components/Sidebar'
@@ -11,7 +11,7 @@ import { allUsers } from '@/data/users'
 import { initialConversations, getInitialMessages } from '@/data/conversations'
 import { findDirectConversation } from '@/lib/conversations'
 import { currentUser } from '@/data/currentUser'
-import { useDeliveryService } from '@/hooks/useDeliveryService'
+import { useDeliveryService, activityActionToStatus } from '@/hooks/useDeliveryService'
 import { createClient } from '@/lib/supabase/client'
 import { toClientMessage, upsertConversationMessage } from '@/lib/messages'
 import { getMyProfile, getPublicProfile, searchUsers, type PublicUserProfile } from '@/lib/userService'
@@ -47,23 +47,48 @@ export default function Home() {
   const [actionError, setActionError] = useState('')
   const [fallbackReason, setFallbackReason] = useState('')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
-  const { isConnected, lastError } = useDeliveryService(accessToken, (delivered) => {
-    const incoming = toClientMessage({
-      id: delivered.messageId,
-      conversationId: delivered.conversationId,
-      senderId: delivered.senderId,
-      content: delivered.content,
-      createdAt: delivered.createdAt,
-    })
-    setMessagesByConversation((prev) => upsertConversationMessage(prev, incoming))
-    setConversations((prev) =>
-      prev.map((conversation) =>
-        conversation.id === incoming.conversationId
-          ? { ...conversation, lastMessageAt: incoming.timestamp }
-          : conversation
+  const currentUserIdRef = useRef(currentUserId)
+  currentUserIdRef.current = currentUserId
+  const { isConnected, lastError, sendTyping, typingByConversation } = useDeliveryService(
+    accessToken,
+    (delivered) => {
+      const incoming = toClientMessage({
+        id: delivered.messageId,
+        conversationId: delivered.conversationId,
+        senderId: delivered.senderId,
+        content: delivered.content,
+        createdAt: delivered.createdAt,
+      })
+      setMessagesByConversation((prev) => upsertConversationMessage(prev, incoming))
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === incoming.conversationId
+            ? { ...conversation, lastMessageAt: incoming.timestamp }
+            : conversation
+        )
       )
-    )
-  })
+    },
+    {
+      snapshot: (frame) => {
+        const onlineIds = new Set(frame.users.map((entry) => entry.userId))
+        setUsers((previous) =>
+          previous.map((user) => ({
+            ...user,
+            activityStatus:
+              user.id === currentUserIdRef.current || onlineIds.has(user.id) ? 'online' : 'offline',
+          }))
+        )
+      },
+      changed: (frame) => {
+        const status = activityActionToStatus(frame.action)
+        setUsers((previous) =>
+          previous.map((user) =>
+            user.id === frame.userId ? { ...user, activityStatus: status } : user
+          )
+        )
+      },
+    }
+  )
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId)
 
@@ -327,6 +352,8 @@ export default function Home() {
             conversation={selectedConversation}
             messages={messagesByConversation[selectedConversationId] ?? []}
             onSendMessage={handleSendMessage}
+            onSendTyping={sendTyping}
+            typingUserIds={typingByConversation[selectedConversationId] ?? []}
             isServerConnected={isConnected}
             sendError={lastError}
             currentUserId={currentUserId}

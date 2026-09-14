@@ -1,4 +1,10 @@
-import type { DeliveredMessagePayload, DeliveryServiceResponse } from '@/types/deliveryService'
+import type {
+  ActivityChangedFrame,
+  ActivitySnapshotFrame,
+  DeliveredMessagePayload,
+  DeliveryServiceResponse,
+  TypingFrame,
+} from '@/types/deliveryService'
 
 const LOCAL_WS_URL = 'ws://localhost:8082'
 
@@ -25,6 +31,9 @@ export class DeliveryClient {
   private authenticated = false
   private statusListeners = new Set<(connected: boolean, error?: string) => void>()
   private messageListeners = new Set<(message: DeliveredMessagePayload) => void>()
+  private typingListeners = new Set<(frame: TypingFrame) => void>()
+  private activityChangedListeners = new Set<(frame: ActivityChangedFrame) => void>()
+  private activitySnapshotListeners = new Set<(frame: ActivitySnapshotFrame) => void>()
 
   constructor(
     private accessToken: string,
@@ -97,6 +106,17 @@ export class DeliveryClient {
     this.socket?.close()
   }
 
+  sendTyping(conversationId: string, isTyping: boolean): void {
+    if (!this.isConnected() || !this.socket) return
+    this.socket.send(
+      JSON.stringify({
+        type: 'typing',
+        conversationId,
+        isTyping,
+      })
+    )
+  }
+
   subscribeStatus(listener: (connected: boolean, error?: string) => void): () => void {
     this.statusListeners.add(listener)
     listener(this.isConnected())
@@ -106,6 +126,21 @@ export class DeliveryClient {
   subscribeMessages(listener: (message: DeliveredMessagePayload) => void): () => void {
     this.messageListeners.add(listener)
     return () => this.messageListeners.delete(listener)
+  }
+
+  subscribeTyping(listener: (frame: TypingFrame) => void): () => void {
+    this.typingListeners.add(listener)
+    return () => this.typingListeners.delete(listener)
+  }
+
+  subscribeActivityChanged(listener: (frame: ActivityChangedFrame) => void): () => void {
+    this.activityChangedListeners.add(listener)
+    return () => this.activityChangedListeners.delete(listener)
+  }
+
+  subscribeActivitySnapshot(listener: (frame: ActivitySnapshotFrame) => void): () => void {
+    this.activitySnapshotListeners.add(listener)
+    return () => this.activitySnapshotListeners.delete(listener)
   }
 
   private handleMessage(
@@ -133,6 +168,21 @@ export class DeliveryClient {
     if (response.type === 'message_created') {
       const delivered = response.message
       this.messageListeners.forEach((listener) => listener(delivered))
+      return
+    }
+
+    if (response.type === 'typing') {
+      this.typingListeners.forEach((listener) => listener(response))
+      return
+    }
+
+    if (response.type === 'activity_changed') {
+      this.activityChangedListeners.forEach((listener) => listener(response))
+      return
+    }
+
+    if (response.type === 'activity_snapshot') {
+      this.activitySnapshotListeners.forEach((listener) => listener(response))
       return
     }
 
