@@ -5,11 +5,14 @@ import Link from 'next/link'
 import type { Conversation, Message, User } from '@/types'
 import { getConversationDisplayName, getOtherParticipantId } from '@/lib/conversations'
 import { MAX_MESSAGE_CONTENT_LENGTH } from '@/lib/messages'
+import { useOutgoingTyping } from '@/hooks/useOutgoingTyping'
 
 interface ChatWindowProps {
   conversation: Conversation
   messages: Message[]
   onSendMessage: (content: string) => void | Promise<void>
+  onSendTyping: (conversationId: string, isTyping: boolean) => void
+  typingUserIds?: string[]
   isServerConnected?: boolean
   sendError?: string | null
   currentUserId: string
@@ -49,6 +52,8 @@ export default function ChatWindow({
   conversation,
   messages,
   onSendMessage,
+  onSendTyping,
+  typingUserIds = [],
   isServerConnected = false,
   sendError = null,
   currentUserId,
@@ -56,6 +61,7 @@ export default function ChatWindow({
 }: ChatWindowProps) {
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const setTyping = useOutgoingTyping(conversation.id, onSendTyping)
   const resolveUser = (id: string) => users.find((user) => user.id === id)
   const displayMessages = messages.map((message) => ({
     ...message,
@@ -66,10 +72,13 @@ export default function ChatWindow({
   const otherId = getOtherParticipantId(conversation, currentUserId)
   const otherUser = otherId ? resolveUser(otherId) : undefined
   const displayName = getConversationDisplayName(conversation, currentUserId, resolveUser)
+  const typingNames = typingUserIds
+    .filter((userId) => userId !== currentUserId)
+    .map((userId) => resolveUser(userId)?.name ?? 'Someone')
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, typingNames.length])
 
   const trimmedInput = inputValue.trim()
   const isOverLimit = inputValue.length > MAX_MESSAGE_CONTENT_LENGTH
@@ -77,6 +86,7 @@ export default function ChatWindow({
 
   const handleSendMessage = () => {
     if (canSend) {
+      setTyping(false)
       onSendMessage(trimmedInput)
       setInputValue('')
     }
@@ -187,6 +197,13 @@ export default function ChatWindow({
             </div>
           )
         })}
+        {typingNames.length > 0 && (
+          <p className="text-xs text-gray-400 italic px-1">
+            {typingNames.length === 1
+              ? `${typingNames[0]} is typing…`
+              : `${typingNames.join(', ')} are typing…`}
+          </p>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -201,7 +218,12 @@ export default function ChatWindow({
           <div className="flex-1">
             <textarea
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                const nextValue = e.target.value
+                setInputValue(nextValue)
+                setTyping(nextValue.trim().length > 0)
+              }}
+              onBlur={() => setTyping(false)}
               onKeyDown={handleKeyDown}
               maxLength={MAX_MESSAGE_CONTENT_LENGTH}
               placeholder={isGroup ? `Message ${displayName}...` : 'Type a message...'}
