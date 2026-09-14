@@ -1,5 +1,33 @@
 import { CURRENT_USER_ID } from '@/data/currentUser'
-import type { Conversation } from '@/types'
+import type { Conversation, Message } from '@/types'
+
+export function sortConversationsByRecent(conversations: Conversation[]): Conversation[] {
+  return [...conversations].sort((a, b) => {
+    const aTime = a.lastMessageAt ?? a.dateCreated
+    const bTime = b.lastMessageAt ?? b.dateCreated
+    return bTime.localeCompare(aTime)
+  })
+}
+
+export function formatLastMessageSnippet(
+  message: Message | undefined,
+  currentUserId: string,
+  resolveSenderName?: (senderId: string) => string | undefined,
+  maxLength = 56
+): string | null {
+  if (!message) return null
+  let prefix = ''
+  if (message.senderId === currentUserId) {
+    prefix = 'You: '
+  } else if (resolveSenderName) {
+    const name = resolveSenderName(message.senderId)
+    if (name) prefix = `${name}: `
+  }
+  const body = message.content.trim().replace(/\s+/g, ' ')
+  const combined = `${prefix}${body}`
+  if (combined.length <= maxLength) return combined
+  return `${combined.slice(0, maxLength - 1)}…`
+}
 
 export function getOtherParticipantId(
   conversation: Conversation,

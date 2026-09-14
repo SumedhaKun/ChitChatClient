@@ -1,13 +1,16 @@
 'use client'
 
-import type { Conversation, User } from '@/types'
+import type { Conversation, Message, User } from '@/types'
 import {
+  formatLastMessageSnippet,
   getConversationDisplayName,
   getOtherParticipantId,
+  sortConversationsByRecent,
 } from '@/lib/conversations'
 
 interface SidebarProps {
   conversations: Conversation[]
+  messagesByConversation: Record<string, Message[]>
   selectedConversationId: string
   onSelectConversation: (id: string) => void
   onCreateGroup: () => void
@@ -17,6 +20,7 @@ interface SidebarProps {
 
 export default function Sidebar({
   conversations,
+  messagesByConversation,
   selectedConversationId,
   onSelectConversation,
   onCreateGroup,
@@ -24,8 +28,15 @@ export default function Sidebar({
   users,
 }: SidebarProps) {
   const resolveUser = (id: string) => users.find((user) => user.id === id)
-  const groupConversations = conversations.filter((c) => c.isGroup)
-  const directConversations = conversations.filter((c) => !c.isGroup)
+  const resolveSenderName = (senderId: string) => resolveUser(senderId)?.name
+  const snippetFor = (conversationId: string) =>
+    formatLastMessageSnippet(
+      messagesByConversation[conversationId]?.at(-1),
+      currentUserId,
+      resolveSenderName
+    )
+  const groupConversations = sortConversationsByRecent(conversations.filter((c) => c.isGroup))
+  const directConversations = sortConversationsByRecent(conversations.filter((c) => !c.isGroup))
 
   return (
     <aside className="w-72 bg-gray-900 border-r border-gray-800 overflow-y-auto flex flex-col">
@@ -66,7 +77,10 @@ export default function Sidebar({
                     <h3 className="text-sm font-medium text-gray-100 truncate">
                       {getConversationDisplayName(conversation, currentUserId, resolveUser)}
                     </h3>
-                    <p className="text-xs text-gray-500">{conversation.participantIds.length} members</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {snippetFor(conversation.id) ??
+                        `${conversation.participantIds.length} members`}
+                    </p>
                   </div>
                 </button>
               </li>
@@ -102,19 +116,20 @@ export default function Sidebar({
                     <div className="w-12 h-12 rounded-full bg-gray-700 shrink-0" />
                   )}
                   <div className="flex-1 text-left min-w-0">
-                    <h3 className="text-sm font-medium text-gray-100 truncate">
-                      {otherUser?.name ?? 'Unknown'}
-                    </h3>
-                    {otherUser && (
-                      <p className="text-xs text-gray-500">@{otherUser.username}</p>
-                    )}
-                    {otherUser && (
-                      <p className={`text-xs ${
-                        otherUser.activityStatus === 'online' ? 'text-green-400 font-medium' : 'text-gray-500'
-                      }`}>
-                        {otherUser.activityStatus === 'online' ? '● Online' : '○ Offline'}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <h3 className="text-sm font-medium text-gray-100 truncate">
+                        {otherUser?.name ?? 'Unknown'}
+                      </h3>
+                      {otherUser?.activityStatus === 'online' && (
+                        <span className="shrink-0 text-[10px] text-green-400" title="Online">
+                          ●
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 truncate">
+                      {snippetFor(conversation.id) ??
+                        (otherUser ? `@${otherUser.username}` : 'No messages yet')}
+                    </p>
                   </div>
                 </button>
               </li>

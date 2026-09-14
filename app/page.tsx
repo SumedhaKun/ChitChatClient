@@ -9,7 +9,8 @@ import UserSearch from '@/components/UserSearch'
 import CreateGroupModal from '@/components/CreateGroupModal'
 import { allUsers } from '@/data/users'
 import { initialConversations, getInitialMessages } from '@/data/conversations'
-import { findDirectConversation } from '@/lib/conversations'
+import { isAuthStatusMessage, refreshIfAuthError } from '@/lib/authErrors'
+import { findDirectConversation, sortConversationsByRecent } from '@/lib/conversations'
 import { currentUser } from '@/data/currentUser'
 import { useDeliveryService, activityActionToStatus } from '@/hooks/useDeliveryService'
 import { createClient } from '@/lib/supabase/client'
@@ -54,7 +55,75 @@ export default function Home() {
   >({})
   const currentUserIdRef = useRef(currentUserId)
   currentUserIdRef.current = currentUserId
+  const accessTokenRef = useRef(accessToken)
+  accessTokenRef.current = accessToken
+  const messagesByConversationRef = useRef(messagesByConversation)
+  messagesByConversationRef.current = messagesByConversation
+  const conversationsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastMarkedSeenRef = useRef<Record<string, string>>({})
+
+  const refreshConversationsFromApi = useCallback(async () => {
+    const token = accessTokenRef.current
+    if (!token) {
+      window.location.reload()
+      return
+    }
+
+    try {
+      const apiConversations = await listConversations(token)
+      const mapped = apiConversations.map(toConversation)
+      const memberIds = Array.from(
+        new Set(mapped.flatMap((conversation) => conversation.participantIds))
+      ).filter((id) => id !== currentUserIdRef.current)
+
+      const profiles = await Promise.all(memberIds.map((id) => getPublicProfile(token, id)))
+      const profileUsers = profiles.filter(isProfile).map(toUser)
+
+      setUsers((previous) => {
+        const merged = new Map(previous.map((user) => [user.id, user]))
+        profileUsers.forEach((user) => merged.set(user.id, user))
+        return Array.from(merged.values())
+      })
+
+      const nextMessages = { ...messagesByConversationRef.current }
+      for (const conversation of mapped) {
+        if (!nextMessages[conversation.id]) {
+          nextMessages[conversation.id] = []
+        }
+      }
+
+      setConversations((previousConversations) =>
+        sortConversationsByRecent(
+          mapped.map((conversation) => {
+            const fromMessages = nextMessages[conversation.id]?.at(-1)?.timestamp
+            const fromPrevious = previousConversations.find(
+              (candidate) => candidate.id === conversation.id
+            )?.lastMessageAt
+            return {
+              ...conversation,
+              lastMessageAt: fromMessages ?? fromPrevious ?? conversation.dateCreated,
+            }
+          })
+        )
+      )
+      setMessagesByConversation(nextMessages)
+    } catch (cause: unknown) {
+      refreshIfAuthError(cause)
+      console.error(
+        'Failed to refresh conversations:',
+        cause instanceof Error ? cause.message : cause
+      )
+    }
+  }, [])
+
+  const scheduleConversationsRefresh = useCallback(() => {
+    if (conversationsRefreshTimerRef.current) return
+    conversationsRefreshTimerRef.current = setTimeout(() => {
+      conversationsRefreshTimerRef.current = null
+      void refreshConversationsFromApi()
+    }, 250)
+  }, [refreshConversationsFromApi])
+
   const { isConnected, lastError, sendTyping, typingByConversation } = useDeliveryService(
     accessToken,
     (delivered) => {
@@ -66,13 +135,20 @@ export default function Home() {
         createdAt: delivered.createdAt,
       })
       setMessagesByConversation((prev) => upsertConversationMessage(prev, incoming))
-      setConversations((prev) =>
-        prev.map((conversation) =>
-          conversation.id === incoming.conversationId
-            ? { ...conversation, lastMessageAt: incoming.timestamp }
-            : conversation
+      setConversations((prev) => {
+        const known = prev.some((conversation) => conversation.id === incoming.conversationId)
+        if (!known) {
+          scheduleConversationsRefresh()
+          return prev
+        }
+        return sortConversationsByRecent(
+          prev.map((conversation) =>
+            conversation.id === incoming.conversationId
+              ? { ...conversation, lastMessageAt: incoming.timestamp }
+              : conversation
+          )
         )
-      )
+      })
     },
     {
       snapshot: (frame) => {
@@ -94,6 +170,21 @@ export default function Home() {
         )
       },
     }
+  )
+
+  useEffect(() => {
+    if (lastError && isAuthStatusMessage(lastError)) {
+      window.location.reload()
+    }
+  }, [lastError])
+
+  useEffect(
+    () => () => {
+      if (conversationsRefreshTimerRef.current) {
+        clearTimeout(conversationsRefreshTimerRef.current)
+      }
+    },
+    []
   )
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId)
@@ -156,9 +247,10 @@ export default function Home() {
     setFallbackReason(reason)
     setUsers([currentUser, ...allUsers])
     setCurrentUserId(currentUser.id)
-    setConversations(initialConversations)
+    const sortedConversations = sortConversationsByRecent(initialConversations)
+    setConversations(sortedConversations)
     setMessagesByConversation(buildInitialMessages())
-    setSelectedConversationId(initialConversations[0]?.id ?? '')
+    setSelectedConversationId(sortedConversations[0]?.id ?? '')
     setLoading(false)
   }, [])
 
@@ -209,7 +301,6 @@ export default function Home() {
         ),
       ])
 
-      const mappedConversations = apiConversations.map(toConversation)
       const messageMap = Object.fromEntries(
         apiConversations.map((conversation, index) => [
           conversation.id,
@@ -224,6 +315,19 @@ export default function Home() {
           ),
         ])
       )
+      const mappedConversations = sortConversationsByRecent(
+        apiConversations.map((conversation, index) => {
+          const base = toConversation(conversation)
+          const latestApiMessage = histories[index].messages[0]
+          const latestClientMessage = messageMap[conversation.id]?.at(-1)
+          return {
+            ...base,
+            lastMessageAt:
+              latestClientMessage?.timestamp ??
+              (latestApiMessage ? normalizeTimestamp(latestApiMessage.createdAt) : base.dateCreated),
+          }
+        })
+      )
       const mappedUsers = [toUser(me), ...profiles.filter(isProfile).map(toUser)]
       setAccessToken(token)
       setCurrentUserId(me.id)
@@ -235,6 +339,7 @@ export default function Home() {
     }
 
     load().catch((cause: unknown) => {
+      refreshIfAuthError(cause)
       setLoadError(cause instanceof Error ? cause.message : 'Unable to load ChitChat')
       setLoading(false)
     })
@@ -333,8 +438,10 @@ export default function Home() {
     }))
 
     setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedConversationId ? { ...c, lastMessageAt: timestamp } : c
+      sortConversationsByRecent(
+        prev.map((c) =>
+          c.id === selectedConversationId ? { ...c, lastMessageAt: timestamp } : c
+        )
       )
     )
 
@@ -401,6 +508,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           conversations={conversations}
+          messagesByConversation={messagesByConversation}
           selectedConversationId={selectedConversationId}
           onSelectConversation={setSelectedConversationId}
           onCreateGroup={() => setShowCreateGroup(true)}

@@ -1,3 +1,5 @@
+import { refreshIfAuthError } from '@/lib/authErrors'
+
 const USER_SERVICE_URL =
   process.env.NEXT_PUBLIC_USER_SERVICE_URL ?? 'http://localhost:8081'
 
@@ -50,10 +52,12 @@ async function request<T>(
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ApiError
-    throw new UserServiceError(
+    const error = new UserServiceError(
       body.error?.message ?? body.message ?? `Request failed (${response.status})`,
       response.status
     )
+    refreshIfAuthError(error)
+    throw error
   }
 
   return response.json() as Promise<T>

@@ -1,3 +1,5 @@
+import { refreshIfAuthError } from '@/lib/authErrors'
+
 const MESSAGE_SERVICE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_SERVICE_URL ?? 'http://localhost:8080'
 
@@ -74,11 +76,13 @@ async function request<T>(
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorBody
-    throw new MessageServiceError(
+    const error = new MessageServiceError(
       body.error?.message ?? body.message ?? `Message service request failed (${response.status})`,
       body.error?.code ?? `HTTP_${response.status}`,
       body.error?.details
     )
+    refreshIfAuthError(error)
+    throw error
   }
 
   return response.json() as Promise<T>
