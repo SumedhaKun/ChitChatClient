@@ -21,6 +21,7 @@ import {
   createMessage,
   getConversationMessages,
   getConversationParticipantIds,
+  getMemberLastSeenMessageId,
   getOtherParticipantLastSeen,
   listConversations,
   markConversationSeen,
@@ -51,6 +52,9 @@ export default function Home() {
   const [fallbackReason, setFallbackReason] = useState('')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [otherLastSeenByConversation, setOtherLastSeenByConversation] = useState<
+    Record<string, string | null>
+  >({})
+  const [myLastSeenByConversation, setMyLastSeenByConversation] = useState<
     Record<string, string | null>
   >({})
   const currentUserIdRef = useRef(currentUserId)
@@ -107,6 +111,15 @@ export default function Home() {
         )
       )
       setMessagesByConversation(nextMessages)
+      setMyLastSeenByConversation((previous) => ({
+        ...previous,
+        ...Object.fromEntries(
+          apiConversations.map((conversation) => [
+            conversation.id,
+            getMemberLastSeenMessageId(conversation, currentUserIdRef.current),
+          ])
+        ),
+      }))
     } catch (cause: unknown) {
       refreshIfAuthError(cause)
       console.error(
@@ -198,15 +211,24 @@ export default function Home() {
     if (lastMarkedSeenRef.current[selectedConversationId] === latestMessage.id) return
 
     lastMarkedSeenRef.current[selectedConversationId] = latestMessage.id
-    markConversationSeen(accessToken, selectedConversationId, latestMessage.id).catch(
-      (cause: unknown) => {
+    setMyLastSeenByConversation((previous) => ({
+      ...previous,
+      [selectedConversationId]: latestMessage.id,
+    }))
+    markConversationSeen(accessToken, selectedConversationId, latestMessage.id)
+      .then((member) => {
+        setMyLastSeenByConversation((previous) => ({
+          ...previous,
+          [selectedConversationId]: member.lastSeenMessage,
+        }))
+      })
+      .catch((cause: unknown) => {
         delete lastMarkedSeenRef.current[selectedConversationId]
         console.error(
           'Failed to mark conversation seen:',
           cause instanceof Error ? cause.message : cause
         )
-      }
-    )
+      })
   }, [accessToken, selectedConversationId, selectedMessages])
 
   useEffect(() => {
@@ -249,7 +271,16 @@ export default function Home() {
     setCurrentUserId(currentUser.id)
     const sortedConversations = sortConversationsByRecent(initialConversations)
     setConversations(sortedConversations)
-    setMessagesByConversation(buildInitialMessages())
+    const demoMessages = buildInitialMessages()
+    setMessagesByConversation(demoMessages)
+    setMyLastSeenByConversation(
+      Object.fromEntries(
+        sortedConversations.map((conversation) => [
+          conversation.id,
+          demoMessages[conversation.id]?.at(-1)?.id ?? null,
+        ])
+      )
+    )
     setSelectedConversationId(sortedConversations[0]?.id ?? '')
     setLoading(false)
   }, [])
@@ -334,6 +365,14 @@ export default function Home() {
       setUsers(mappedUsers)
       setConversations(mappedConversations)
       setMessagesByConversation(messageMap)
+      setMyLastSeenByConversation(
+        Object.fromEntries(
+          apiConversations.map((conversation) => [
+            conversation.id,
+            getMemberLastSeenMessageId(conversation, me.id),
+          ])
+        )
+      )
       setSelectedConversationId(mappedConversations[0]?.id ?? '')
       setLoading(false)
     }
@@ -509,6 +548,7 @@ export default function Home() {
         <Sidebar
           conversations={conversations}
           messagesByConversation={messagesByConversation}
+          myLastSeenByConversation={myLastSeenByConversation}
           selectedConversationId={selectedConversationId}
           onSelectConversation={setSelectedConversationId}
           onCreateGroup={() => setShowCreateGroup(true)}

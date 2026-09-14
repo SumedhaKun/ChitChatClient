@@ -69,6 +69,34 @@ export function getReadReceiptMessageId(
   return null
 }
 
+export function countUnreadMessages(
+  messages: Message[] | undefined,
+  myLastSeenMessageId: string | null | undefined,
+  currentUserId: string,
+  options?: { treatAsRead?: boolean }
+): number {
+  if (options?.treatAsRead || !messages?.length) return 0
+
+  const sorted = [...messages].sort(compareMessages)
+  let startIndex = 0
+
+  if (myLastSeenMessageId) {
+    const seenIndex = sorted.findIndex((message) => message.id === myLastSeenMessageId)
+    startIndex = seenIndex === -1 ? 0 : seenIndex + 1
+  }
+
+  return sorted.slice(startIndex).filter((message) => message.senderId !== currentUserId).length
+}
+
+export function isConversationUnread(
+  messages: Message[] | undefined,
+  myLastSeenMessageId: string | null | undefined,
+  currentUserId: string,
+  options?: { treatAsRead?: boolean }
+): boolean {
+  return countUnreadMessages(messages, myLastSeenMessageId, currentUserId, options) > 0
+}
+
 export function upsertConversationMessage(
   messagesByConversation: Record<string, Message[]>,
   incoming: Message
