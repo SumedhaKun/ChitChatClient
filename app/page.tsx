@@ -20,7 +20,9 @@ import {
   createMessage,
   getConversationMessages,
   getConversationParticipantIds,
+  getOtherParticipantLastSeen,
   listConversations,
+  markConversationSeen,
   MessageServiceError,
   type ApiConversation,
 } from '@/lib/messageService'
@@ -47,8 +49,12 @@ export default function Home() {
   const [actionError, setActionError] = useState('')
   const [fallbackReason, setFallbackReason] = useState('')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [otherLastSeenByConversation, setOtherLastSeenByConversation] = useState<
+    Record<string, string | null>
+  >({})
   const currentUserIdRef = useRef(currentUserId)
   currentUserIdRef.current = currentUserId
+  const lastMarkedSeenRef = useRef<Record<string, string>>({})
   const { isConnected, lastError, sendTyping, typingByConversation } = useDeliveryService(
     accessToken,
     (delivered) => {
@@ -91,6 +97,60 @@ export default function Home() {
   )
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId)
+  const selectedMessages = messagesByConversation[selectedConversationId] ?? []
+
+  useEffect(() => {
+    if (!accessToken || !selectedConversationId) return
+
+    const latestMessage = selectedMessages.at(-1)
+    if (!latestMessage) return
+    if (lastMarkedSeenRef.current[selectedConversationId] === latestMessage.id) return
+
+    lastMarkedSeenRef.current[selectedConversationId] = latestMessage.id
+    markConversationSeen(accessToken, selectedConversationId, latestMessage.id).catch(
+      (cause: unknown) => {
+        delete lastMarkedSeenRef.current[selectedConversationId]
+        console.error(
+          'Failed to mark conversation seen:',
+          cause instanceof Error ? cause.message : cause
+        )
+      }
+    )
+  }, [accessToken, selectedConversationId, selectedMessages])
+
+  useEffect(() => {
+    if (!accessToken || !selectedConversation || selectedConversation.isGroup) {
+      return
+    }
+
+    let cancelled = false
+
+    const refreshOtherLastSeen = () => {
+      getOtherParticipantLastSeen(accessToken, selectedConversationId)
+        .then((lastSeenMessage) => {
+          if (cancelled) return
+          setOtherLastSeenByConversation((previous) => ({
+            ...previous,
+            [selectedConversationId]: lastSeenMessage,
+          }))
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return
+          console.error(
+            'Failed to load read receipt:',
+            cause instanceof Error ? cause.message : cause
+          )
+        })
+    }
+
+    refreshOtherLastSeen()
+    const intervalId = window.setInterval(refreshOtherLastSeen, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [accessToken, selectedConversation, selectedConversationId, selectedMessages])
 
   const useDevelopmentFallback = useCallback((reason: string) => {
     setFallbackReason(reason)
@@ -350,7 +410,8 @@ export default function Home() {
         {selectedConversation ? (
           <ChatWindow
             conversation={selectedConversation}
-            messages={messagesByConversation[selectedConversationId] ?? []}
+            messages={selectedMessages}
+            otherLastSeenMessageId={otherLastSeenByConversation[selectedConversationId] ?? null}
             onSendMessage={handleSendMessage}
             onSendTyping={sendTyping}
             typingUserIds={typingByConversation[selectedConversationId] ?? []}
